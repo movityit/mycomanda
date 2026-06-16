@@ -168,6 +168,19 @@ export function DisplayPage() {
 
     useEffect(() => {
         const es = new EventSource("/api/events/display");
+        const pollInterval = setInterval(() => {
+            const station = selectedRef.current;
+            if (station) loadMissingItems(station);
+        }, 30000);
+
+        let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+        es.onerror = () => {
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+                const station = selectedRef.current;
+                if (station) loadMissingItems(station);
+            }, 3000);
+        };
 
         es.addEventListener("confirmed-order", () => {
             const station = selectedRef.current;
@@ -184,12 +197,20 @@ export function DisplayPage() {
             if (station) loadMissingItems(station);
         });
 
-        return () => es.close();
+        return () => {
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            clearInterval(pollInterval);
+            es.close();
+        };
     }, [loadMissingItems]);
 
     useEffect(() => {
         const es = new EventSource("/api/orders/progress/events");
         es.onmessage = () => {
+            const station = selectedRef.current;
+            if (station) loadMissingItems(station);
+        };
+        es.onerror = () => {
             const station = selectedRef.current;
             if (station) loadMissingItems(station);
         };

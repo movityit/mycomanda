@@ -43,23 +43,18 @@ export default function Manager() {
 
     const confirmedOrders = useMemo(() =>
         Array.from(ordersMap.values()).filter(o =>
-            (o.orderStationStates ?? []).length > 0 &&
-            (o.status === 'CONFIRMED' || o.status === 'PARTIAL')
+            o.status === 'CONFIRMED' || o.status === 'PARTIAL'
         ),
         [ordersMap]
     );
 
     const readyOrders = useMemo(() =>
-        Array.from(ordersMap.values()).filter(o =>
-            (o.orderStationStates ?? []).length > 0 && o.status === 'COMPLETED'
-        ),
+        Array.from(ordersMap.values()).filter(o => o.status === 'COMPLETED'),
         [ordersMap]
     );
 
     const pickedUpOrders = useMemo(() =>
-        Array.from(ordersMap.values()).filter(o =>
-            (o.orderStationStates ?? []).length > 0 && o.status === 'PICKED_UP'
-        ),
+        Array.from(ordersMap.values()).filter(o => o.status === 'PICKED_UP'),
         [ordersMap]
     );
 
@@ -143,14 +138,16 @@ export default function Manager() {
                             if (Array.isArray(data)) {
                                 setStations(data);
                                 fetchOrders();
+                            } else {
+                                fetchOrders();
                             }
                         })
-                        .catch(err => { if (!handleApiError(err, router)) console.error(err); });
+                        .catch(err => { if (!handleApiError(err, router)) console.error(err); fetchOrders(); });
                 } else {
                     fetchOrders();
                 }
             })
-            .catch(err => { if (!handleApiError(err, router)) console.error(err); });
+            .catch(err => { if (!handleApiError(err, router)) console.error(err); fetchOrders(); });
     }, [router]);
 
     useEffect(() => {
@@ -158,6 +155,7 @@ export default function Manager() {
 
         const eventSource = new EventSource('/api/events/display');
         let isFirstOpen = true;
+        const pollInterval = setInterval(fetchOrders, 30000);
 
         eventSource.addEventListener('open', () => {
             if (!isFirstOpen) fetchOrders();
@@ -167,7 +165,6 @@ export default function Manager() {
         const handleConfirmedOrder = (event: MessageEvent) => {
             try {
                 const raw = toOrder(JSON.parse(event.data));
-                if ((raw.ordersStations ?? []).length === 0) return;
                 const orderStationStates = (raw.orderStationStates ?? []).length > 0
                     ? raw.orderStationStates!
                     : (raw.ordersStations ?? []).map(stId => ({ stationId: stId, status: 'CONFIRMED' }));
@@ -242,9 +239,18 @@ export default function Manager() {
             }
         });
 
-        eventSource.onerror = () => { console.error("SSE connection error"); };
+        let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+        eventSource.onerror = () => {
+            console.error("SSE connection error");
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(fetchOrders, 3000);
+        };
 
-        return () => { eventSource.close(); };
+        return () => {
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            clearInterval(pollInterval);
+            eventSource.close();
+        };
     }, [fetchOrders]);
 
     const updateOrderStatus = async (orderId: string, newStatus: Status, stationId?: string) => {

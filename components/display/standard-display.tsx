@@ -446,8 +446,8 @@ export function StandardDisplay({ requireTable = false }: { requireTable?: boole
                                 setStations(data);
                                 fetchOrders();
                             }
-                        })
-                        .catch(err => { if (!handleApiError(err, router)) console.error(err); });
+                            })
+                            .catch(err => { if (!handleApiError(err, router)) console.error(err); fetchOrders(); });
                 } else {
                     fetchOrders();
                 }
@@ -493,7 +493,7 @@ export function StandardDisplay({ requireTable = false }: { requireTable?: boole
                                     fetchOrders();
                                 }
                             })
-                            .catch(err => { if (!handleApiError(err, router)) console.error(err); });
+                            .catch(err => { if (!handleApiError(err, router)) console.error(err); fetchOrders(); });
                     } else {
                         setStations([]);
                         fetchOrders();
@@ -508,6 +508,7 @@ export function StandardDisplay({ requireTable = false }: { requireTable?: boole
     useEffect(() => {
         const es = new EventSource("/api/events/display");
         let isFirstOpen = true;
+        const pollInterval = setInterval(fetchOrders, 30000);
 
         es.addEventListener('open', () => {
             if (!isFirstOpen) fetchOrders();
@@ -518,7 +519,7 @@ export function StandardDisplay({ requireTable = false }: { requireTable?: boole
             try {
                 const raw = JSON.parse(event.data) as ReadyOrder;
                 if (!shouldShowInStandardDisplay(raw, requireTable)) return;
-                if (stationsEnabledRef.current && (raw.ordersStations ?? []).length === 0) return;
+                if (stationsEnabledRef.current && (raw.ordersStations ?? []).length === 0 && (raw.orderStationStates ?? []).length === 0) return;
                 const orderStationStates = (raw.orderStationStates ?? []).length > 0
                     ? raw.orderStationStates!
                     : (raw.ordersStations ?? []).map(stId => ({ stationId: stId, status: 'CONFIRMED' }));
@@ -612,7 +613,17 @@ export function StandardDisplay({ requireTable = false }: { requireTable?: boole
             }
         });
 
-        return () => es.close();
+        let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+        es.onerror = () => {
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(fetchOrders, 3000);
+        };
+
+        return () => {
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            clearInterval(pollInterval);
+            es.close();
+        };
     }, [fetchOrders]);
 
     useEffect(() => {

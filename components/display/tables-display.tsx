@@ -164,6 +164,14 @@ export function TablesDisplay() {
 
     useEffect(() => {
         const es = new EventSource("/api/events/display");
+        const pollInterval = setInterval(loadOrders, 30000);
+
+        let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+        es.onerror = () => {
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(loadOrders, 3000);
+        };
+
         es.addEventListener("confirmed-order", () => loadOrders());
         es.addEventListener("order-station-status-update", () => loadOrders());
         es.addEventListener("order-cancelled", () => loadOrders());
@@ -171,6 +179,8 @@ export function TablesDisplay() {
         const interval = setInterval(loadOrders, 30000);
 
         return () => {
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            clearInterval(pollInterval);
             es.close();
             clearInterval(interval);
         };
