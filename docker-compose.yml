@@ -1,0 +1,25 @@
+services:
+  mycomanda:
+    image: mycomanda-comanda
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mycomanda-comanda
+    restart: always
+    ports:
+      - "3035:3035"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - mycomanda_data:/app/data
+    networks:
+      - mysagra_default
+
+volumes:
+  mycomanda_data:
+
+networks:
+  mysagra_default:
+    external: true
