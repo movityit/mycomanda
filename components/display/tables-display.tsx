@@ -21,9 +21,12 @@ type TableGroup = {
 
 function normalizeTableLabel(table: string | undefined) {
     const raw = (table ?? "").trim();
-    if (!raw || raw.toUpperCase() === "NO_TABLE" || raw.toUpperCase() === "NO_TAVOLO") {
-        return null;
-    }
+    const normalizedRaw = raw.replace(/\s+/g, " ").toUpperCase();
+    const noTableTokens = ["NO_TABLE", "NO_TAVOLO", "NO TABLE", "SENZA TAVOLO", "ASPORTO", "BANCO"];
+
+    if (!raw || noTableTokens.includes(normalizedRaw)) return null;
+    if (normalizedRaw.includes("NO_TABLE") || normalizedRaw.includes("NO_TAVOLO") || normalizedRaw.includes("NO TABLE")) return null;
+
     return {
         table: raw,
         label: `Tavolo ${raw}`,
