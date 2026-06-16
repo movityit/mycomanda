@@ -5,6 +5,15 @@ import type { OrderDetail } from "@/types/order";
 import { type DisplayMode, DISPLAY_MODE_KEY } from "@/components/settings/DisplayModeSettingsCard";
 import { TABLES_DISPLAY_ZOOM_KEY, TABLES_SHOW_PREPARING_KEY } from "@/components/settings/DisplayModeSettingsCard";
 
+function getWorkdayBounds() {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const start = new Date(now);
+    if (currentHour < 7) start.setDate(start.getDate() - 1);
+    start.setHours(7, 0, 0, 0);
+    return { dateFrom: start.toISOString(), dateTo: now.toISOString() };
+}
+
 type TableOrder = {
     order: OrderDetail;
     status: "preparing" | "ready";
@@ -44,10 +53,9 @@ export function TablesDisplay() {
 
     const loadOrders = useCallback(async () => {
         try {
-            const now = new Date();
-            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const { dateFrom, dateTo } = getWorkdayBounds();
             const res = await fetch(
-                `/api/orders?include=ordersStationsStates&dateFrom=${todayStart.toISOString()}`
+                `/api/orders?include=ordersStationsStates&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`
             );
             const data = await res.json();
             const list: OrderDetail[] = Array.isArray(data) ? data : data.data;

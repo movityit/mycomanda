@@ -4,6 +4,15 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import type { OrderDetail, Station } from "@/types/order";
 import { KITCHEN_DISPLAY_ZOOM_KEY } from "@/components/settings/DisplayModeSettingsCard";
 
+function getWorkdayBounds() {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const start = new Date(now);
+    if (currentHour < 7) start.setDate(start.getDate() - 1);
+    start.setHours(7, 0, 0, 0);
+    return { dateFrom: start.toISOString(), dateTo: now.toISOString() };
+}
+
 type MissingItem = {
     key: string;
     name: string;
@@ -79,10 +88,9 @@ export function DisplayPage() {
 
     const loadMissingItems = useCallback(async (station: string) => {
         try {
-            const now = new Date();
-            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const { dateFrom, dateTo } = getWorkdayBounds();
             const listRes = await fetch(
-                `/api/orders?include=ordersStationsStates&dateFrom=${todayStart.toISOString()}`
+                `/api/orders?include=ordersStationsStates&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`
             );
             const listData = await listRes.json();
             const list: OrderDetail[] = Array.isArray(listData) ? listData : listData.data;
