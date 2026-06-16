@@ -11,8 +11,7 @@ type OrderListResponse = {
 };
 
 export function getOpenOrderDateParams() {
-    const now = new Date();
-    return `&dateFrom=${encodeURIComponent("1970-01-01T00:00:00.000Z")}&dateTo=${encodeURIComponent(now.toISOString())}`;
+    return "";
 }
 
 export async function fetchAllOrderPages(baseParams: string) {
