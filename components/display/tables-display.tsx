@@ -42,7 +42,12 @@ export function TablesDisplay() {
         try {
             const list = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
 
-            const relevantIds = list.filter(isActiveOrder).map((o: OrderDetail) => o.id);
+            const relevantIds = list
+                .filter((o: OrderDetail) => {
+                    const table = (o.table ?? "").trim();
+                    return table !== "" && table !== "NO_TABLE" && isActiveOrder(o);
+                })
+                .map((o: OrderDetail) => o.id);
 
             const details = await Promise.all(
                 relevantIds.map((id: string) => fetch(`/api/orders/${id}`).then(r => r.json()))
