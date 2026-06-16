@@ -138,11 +138,16 @@ export default function Manager() {
                 if (cfg?.stationsEnabled) {
                     stationsEnabledRef.current = true;
                     setStationsEnabled(true);
-                    const data = await apiFetch<Station[]>("/api/stations");
-                    if (Array.isArray(data)) {
-                        setStations(data);
-                        fetchOrders();
-                    }
+                    apiFetch<Station[]>("/api/stations")
+                        .then(data => {
+                            if (Array.isArray(data)) {
+                                setStations(data);
+                                fetchOrders();
+                            }
+                        })
+                        .catch(err => { if (!handleApiError(err, router)) console.error(err); });
+                } else {
+                    fetchOrders();
                 }
             })
             .catch(err => { if (!handleApiError(err, router)) console.error(err); });
