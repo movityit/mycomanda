@@ -3,15 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { OrderDetail, Station } from "@/types/order";
 import { KITCHEN_DISPLAY_ZOOM_KEY } from "@/components/settings/DisplayModeSettingsCard";
-
-function getWorkdayBounds() {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const start = new Date(now);
-    if (currentHour < 7) start.setDate(start.getDate() - 1);
-    start.setHours(7, 0, 0, 0);
-    return { dateFrom: start.toISOString(), dateTo: now.toISOString() };
-}
+import { fetchAllOrderPages, getOpenOrderDateParams, isActiveOrder } from "@/lib/orders";
 
 type MissingItem = {
     key: string;
@@ -88,17 +80,12 @@ export function DisplayPage() {
 
     const loadMissingItems = useCallback(async (station: string) => {
         try {
-            const { dateFrom, dateTo } = getWorkdayBounds();
-            const listRes = await fetch(
-                `/api/orders?include=ordersStationsStates&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`
-            );
-            const listData = await listRes.json();
-            const list: OrderDetail[] = Array.isArray(listData) ? listData : listData.data;
+            const list = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
 
             const relevantIds = list
                 .filter((o: OrderDetail) => {
                     const state = o.orderStationStates?.find(s => s.stationId === station);
-                    return state && (state.status === "CONFIRMED" || state.status === "PARTIAL");
+                    return state && isActiveOrder(o) && (state.status === "CONFIRMED" || state.status === "PARTIAL");
                 })
                 .map((o: OrderDetail) => o.id);
 

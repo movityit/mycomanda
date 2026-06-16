@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { OrderDetail } from "@/types/order";
+import { fetchAllOrderPages, getOpenOrderDateParams, isActiveOrder } from "@/lib/orders";
 
 type DisplayOrder = {
     displayCode: string;
@@ -17,18 +18,13 @@ export function PublicDisplay() {
 
     const loadOrders = useCallback(async () => {
         try {
-            const now = new Date();
-            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const res = await fetch(
-                `/api/orders?include=ordersStationsStates&dateFrom=${todayStart.toISOString()}`
-            );
-            const data = await res.json();
-            const list: OrderDetail[] = Array.isArray(data) ? data : data.data;
+            const list = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
 
             const prep: DisplayOrder[] = [];
             const rdy: DisplayOrder[] = [];
 
             for (const o of list) {
+                if (!isActiveOrder(o)) continue;
                 const hasConfirmed = o.orderStationStates?.some(s => s.status === "CONFIRMED");
                 const hasCompleted = o.orderStationStates?.some(s => s.status === "COMPLETED");
                 const orderInfo = {

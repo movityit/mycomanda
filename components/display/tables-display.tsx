@@ -4,15 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import type { OrderDetail } from "@/types/order";
 import { type DisplayMode, DISPLAY_MODE_KEY } from "@/components/settings/DisplayModeSettingsCard";
 import { TABLES_DISPLAY_ZOOM_KEY, TABLES_SHOW_PREPARING_KEY } from "@/components/settings/DisplayModeSettingsCard";
-
-function getWorkdayBounds() {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const start = new Date(now);
-    if (currentHour < 7) start.setDate(start.getDate() - 1);
-    start.setHours(7, 0, 0, 0);
-    return { dateFrom: start.toISOString(), dateTo: now.toISOString() };
-}
+import { fetchAllOrderPages, getOpenOrderDateParams, isActiveOrder, isOrderReady } from "@/lib/orders";
 
 type TableOrder = {
     order: OrderDetail;
@@ -39,12 +31,6 @@ function normalizeTableLabel(table: string | undefined) {
     };
 }
 
-function isOrderReady(order: OrderDetail) {
-    const states = order.orderStationStates ?? [];
-    if (states.length > 0) return states.every(s => s.status === "COMPLETED");
-    return order.status === "COMPLETED";
-}
-
 export function TablesDisplay() {
     const [displayMode, setDisplayMode] = useState<DisplayMode>("ready");
     const [tablesShowPreparing, setTablesShowPreparing] = useState(false);
@@ -53,14 +39,9 @@ export function TablesDisplay() {
 
     const loadOrders = useCallback(async () => {
         try {
-            const { dateFrom, dateTo } = getWorkdayBounds();
-            const res = await fetch(
-                `/api/orders?include=ordersStationsStates&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`
-            );
-            const data = await res.json();
-            const list: OrderDetail[] = Array.isArray(data) ? data : data.data;
+            const list = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
 
-            const relevantIds = list.map((o: OrderDetail) => o.id);
+            const relevantIds = list.filter(isActiveOrder).map((o: OrderDetail) => o.id);
 
             const details = await Promise.all(
                 relevantIds.map((id: string) => fetch(`/api/orders/${id}`).then(r => r.json()))
@@ -184,13 +165,10 @@ export function TablesDisplay() {
         es.addEventListener("order-station-status-update", () => loadOrders());
         es.addEventListener("order-cancelled", () => loadOrders());
 
-        const interval = setInterval(loadOrders, 30000);
-
         return () => {
             if (reconnectTimer) clearTimeout(reconnectTimer);
             clearInterval(pollInterval);
             es.close();
-            clearInterval(interval);
         };
     }, [loadOrders]);
 

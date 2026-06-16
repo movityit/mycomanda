@@ -9,16 +9,8 @@ import { StationCard } from "@/components/manager/StationCard";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { apiFetch, handleApiError } from "@/lib/api";
+import { fetchAllOrderPages, getOpenOrderDateParams, isActiveOrder } from "@/lib/orders";
 import type { Order, Station, Status } from "@/types/order";
-
-function getWorkdayBounds() {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const start = new Date(now);
-    if (currentHour < 7) start.setDate(start.getDate() - 1);
-    start.setHours(7, 0, 0, 0);
-    return { dateFrom: start.toISOString(), dateTo: now.toISOString() };
-}
 
 const toOrder = (o: Order): Order => ({
     id: o.id,
@@ -43,13 +35,13 @@ export default function Manager() {
 
     const confirmedOrders = useMemo(() =>
         Array.from(ordersMap.values()).filter(o =>
-            o.status === 'CONFIRMED' || o.status === 'PARTIAL'
+            isActiveOrder(o) && (o.status === 'CONFIRMED' || o.status === 'PARTIAL')
         ),
         [ordersMap]
     );
 
     const readyOrders = useMemo(() =>
-        Array.from(ordersMap.values()).filter(o => o.status === 'COMPLETED'),
+        Array.from(ordersMap.values()).filter(o => isActiveOrder(o) && o.status === 'COMPLETED'),
         [ordersMap]
     );
 
@@ -100,25 +92,9 @@ export default function Manager() {
         return result;
     }, [stationPickedUp]);
 
-    const fetchAllPages = async (baseParams: string): Promise<Order[]> => {
-        let page = 1;
-        let all: Order[] = [];
-        let hasNextPage = true;
-        while (hasNextPage) {
-            const json = await apiFetch<{ data?: Order[]; orders?: Order[]; pagination?: { currentPage?: number; totalPages?: number } }>(`/api/orders?limit=100&page=${page}${baseParams}`);
-            const batch: Order[] = json.data || json.orders || (Array.isArray(json) ? json : []);
-            if (Array.isArray(batch)) all = [...all, ...batch.map(toOrder)];
-            hasNextPage = (json.pagination?.currentPage ?? 0) < (json.pagination?.totalPages ?? 0);
-            page++;
-        }
-        return all;
-    };
-
     const fetchOrders = useCallback(async () => {
         try {
-            const { dateFrom, dateTo } = getWorkdayBounds();
-            const dateParams = `&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`;
-            const orders = await fetchAllPages(`${dateParams}&include=ordersStationsStates`);
+            const orders = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
             setOrdersMap(new Map(orders.map(o => [o.id, o])));
         } catch (error) {
             if (handleApiError(error, router)) return;

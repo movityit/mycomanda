@@ -15,6 +15,7 @@ import { OrderCard } from "./order-card";
 import type { OrderDetail, Station } from "@/types/order";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { fetchAllOrderPages, getOpenOrderDateParams, isActiveOrder } from "@/lib/orders";
 
 export function ComandaPage() {
     const router = useRouter();
@@ -47,22 +48,17 @@ export function ComandaPage() {
     useEffect(() => {
         if (!selectedStation) return;
 
-        const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
         (async () => {
             try {
-                const listRes = await fetch(
-                    `/api/orders?include=ordersStationsStates&dateFrom=${todayStart.toISOString()}`
-                );
-                const listData = await listRes.json();
-                const list = Array.isArray(listData) ? listData : listData.data;
+                const list = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
 
                 const station = selectedStation;
                 const relevantIds = list
                     .filter((o: OrderDetail) =>
-                        o.ordersStations?.includes(station) ||
-                        o.orderStationStates?.some(s => s.stationId === station)
+                        isActiveOrder(o) && (
+                            o.ordersStations?.includes(station) ||
+                            o.orderStationStates?.some(s => s.stationId === station)
+                        )
                     )
                     .map((o: OrderDetail) => o.id);
 

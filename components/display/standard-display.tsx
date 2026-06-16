@@ -3,14 +3,14 @@
 import { Header } from "@/components/display/header";
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { getWorkdayBounds } from "@/utils/utils";
+import { apiFetch, handleApiError } from "@/lib/api";
+import { fetchAllOrderPages, getOpenOrderDateParams, isActiveOrder, isOrderReady, isOrderPreparing } from "@/lib/orders";
 import { type DisplayMode, DISPLAY_MODE_KEY, DISPLAY_ZOOM_KEY } from "@/components/settings/DisplayModeSettingsCard";
 import { EVENT_NAME_KEY } from "@/components/settings/GeneralSettingsCard";
 import { NUMBER_DISPLAY_KEY, TICKET_NUMBER_MAX_KEY } from "@/components/settings/NumberDisplaySettingsCard";
 import type { NumberDisplay } from "@/lib/display-config-store";
 import type { Order, OrderStationState, Station } from "@/types/order";
 import { useTranslation } from "react-i18next";
-import { apiFetch, handleApiError } from "@/lib/api";
 
 const CARDS_PER_PAGE = 40;
 const PAGE_INTERVAL = 10000;
@@ -316,14 +316,14 @@ export function StandardDisplay({ requireTable = false }: { requireTable?: boole
 
     const readyOrders = useMemo(() =>
         Array.from(ordersMap.values())
-            .filter(o => o.status === 'COMPLETED')
+            .filter(o => isOrderReady(o))
             .sort((a, b) => a.ticketNumber - b.ticketNumber),
         [ordersMap]
     );
 
     const prepOrders = useMemo(() =>
         Array.from(ordersMap.values())
-            .filter(o => o.status === 'CONFIRMED' || o.status === 'PARTIAL')
+            .filter(o => isOrderPreparing(o))
             .sort((a, b) => a.ticketNumber - b.ticketNumber),
         [ordersMap]
     );
@@ -387,10 +387,7 @@ export function StandardDisplay({ requireTable = false }: { requireTable?: boole
 
     const fetchOrders = useCallback(async () => {
         try {
-            const { dateFrom, dateTo } = getWorkdayBounds();
-            const dateParams = `&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`;
-            const json = await apiFetch<{ data?: Order[]; orders?: Order[] }>(`/api/orders?limit=100${dateParams}&include=ordersStationsStates`);
-            const orders: Order[] = json.data || json.orders || (Array.isArray(json) ? json : []);
+            const orders = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
             if (!Array.isArray(orders)) return;
 
             const toRO = (o: Order): ReadyOrder => ({
@@ -404,12 +401,23 @@ export function StandardDisplay({ requireTable = false }: { requireTable?: boole
             });
 
             const filtered = orders.filter(o => shouldShowInStandardDisplay(o, requireTable));
-            setOrdersMap(new Map(filtered.map(o => [o.id, toRO(o)])));
+            setOrdersMap(prev => {
+                const next = new Map(prev);
+                for (const order of filtered) {
+                    const readyOrder = toRO(order);
+                    if (!isActiveOrder(readyOrder)) {
+                        next.delete(readyOrder.id);
+                    } else {
+                        next.set(readyOrder.id, readyOrder);
+                    }
+                }
+                return next;
+            });
         } catch (err) {
             if (handleApiError(err, router)) return;
             console.error("Failed to fetch orders:", err);
         }
-    }, [router]);
+    }, [router, requireTable]);
 
     useEffect(() => {
         fetch("/api/display-config")
