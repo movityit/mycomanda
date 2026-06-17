@@ -12,6 +12,8 @@ type MissingItem = {
     notes?: string;
     ingredients: string[];
     orders: string[];
+    orderIds: string[];
+    foodId: string;
     ticketNumber: number;
 };
 
@@ -21,6 +23,7 @@ export function DisplayPage() {
     const [missingItems, setMissingItems] = useState<MissingItem[]>([]);
     const [displayZoom, setDisplayZoom] = useState(100);
     const selectedRef = useRef(selectedStation);
+    const progressMapRef = useRef<Record<string, Record<string, number>>>({});
 
     useEffect(() => {
         selectedRef.current = selectedStation;
@@ -69,7 +72,8 @@ export function DisplayPage() {
     useEffect(() => {
         fetch("/api/stations")
             .then(r => r.json())
-            .then((data: Station[]) => {
+            .then((json: Station[] | { data: Station[] }) => {
+                const data = Array.isArray(json) ? json : (json as { data: Station[] }).data ?? [];
                 setStations(data);
                 if (data.length > 0) {
                     setSelectedStation(prev => prev ?? data[0].id);
@@ -105,6 +109,7 @@ export function DisplayPage() {
                 })
             );
             const progressMap = Object.fromEntries(progressByOrder);
+            progressMapRef.current = progressMap;
 
             const map = new Map<string, MissingItem>();
 
@@ -123,7 +128,10 @@ export function DisplayPage() {
                         const existing = map.get(key);
                         if (existing) {
                             existing.quantity += remaining;
-                            if (!existing.orders.includes(o.displayCode)) existing.orders.push(o.displayCode);
+                            if (!existing.orders.includes(o.displayCode)) {
+                                existing.orders.push(o.displayCode);
+                                existing.orderIds.push(o.id);
+                            }
                         } else {
                             map.set(key, {
                                 key,
@@ -132,6 +140,8 @@ export function DisplayPage() {
                                 notes: item.notes ?? undefined,
                                 ingredients,
                                 orders: [o.displayCode],
+                                orderIds: [o.id],
+                                foodId: item.food.id,
                                 ticketNumber: o.ticketNumber,
                             });
                         }
@@ -150,6 +160,23 @@ export function DisplayPage() {
             console.error(err);
         }
     }, []);
+
+    const handleMark = useCallback(async (item: MissingItem, isUndo: boolean) => {
+        const station = selectedRef.current;
+        if (!station) return;
+        const orderId = item.orderIds[0];
+        if (!orderId) return;
+        const current = progressMapRef.current[orderId]?.[item.foodId] ?? 0;
+        const newCount = isUndo ? Math.max(0, current - 1) : current + 1;
+        try {
+            await fetch(`/api/orders/${orderId}/progress?stationId=${station}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ itemId: item.foodId, count: newCount }),
+            });
+            if (station) loadMissingItems(station);
+        } catch { /* ignore */ }
+    }, [loadMissingItems]);
 
     useEffect(() => {
         if (!selectedStation) return;
@@ -282,6 +309,20 @@ export function DisplayPage() {
                                             </span>
                                         ))}
                                     </div>
+                                </div>
+                                <div className="mt-6 flex gap-3">
+                                    <button
+                                        onClick={() => handleMark(item, false)}
+                                        className="flex-1 py-3 rounded-2xl bg-green-500 text-white text-2xl font-black hover:bg-green-600 active:scale-95 transition"
+                                    >
+                                        ✓
+                                    </button>
+                                    <button
+                                        onClick={() => handleMark(item, true)}
+                                        className="flex-1 py-3 rounded-2xl bg-red-500 text-white text-2xl font-black hover:bg-red-600 active:scale-95 transition"
+                                    >
+                                        ↩
+                                    </button>
                                 </div>
                             </div>
                         ))}
