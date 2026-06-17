@@ -15,6 +15,15 @@ export function getOpenOrderDateParams() {
     return `&dateFrom=${encodeURIComponent("1970-01-01T00:00:00.000Z")}&dateTo=${encodeURIComponent(now.toISOString())}`;
 }
 
+export function getWorkdayDateParams() {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const start = new Date(now);
+    if (currentHour < 7) start.setDate(start.getDate() - 1);
+    start.setHours(7, 0, 0, 0);
+    return `&dateFrom=${encodeURIComponent(start.toISOString())}&dateTo=${encodeURIComponent(now.toISOString())}`;
+}
+
 export async function fetchAllOrderPages(baseParams: string) {
     let page = 1;
     let all: OrderDetail[] = [];

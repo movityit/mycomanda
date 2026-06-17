@@ -4,7 +4,7 @@ import { Header } from "@/components/display/header";
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, handleApiError } from "@/lib/api";
-import { fetchAllOrderPages, getOpenOrderDateParams, isActiveOrder, isOrderReady, isOrderPreparing } from "@/lib/orders";
+import { fetchAllOrderPages, getWorkdayDateParams, isActiveOrder, isOrderReady, isOrderPreparing } from "@/lib/orders";
 import { type DisplayMode, DISPLAY_MODE_KEY, DISPLAY_ZOOM_KEY } from "@/components/settings/DisplayModeSettingsCard";
 import { EVENT_NAME_KEY } from "@/components/settings/GeneralSettingsCard";
 import { NUMBER_DISPLAY_KEY, TICKET_NUMBER_MAX_KEY } from "@/components/settings/NumberDisplaySettingsCard";
@@ -387,7 +387,7 @@ export function StandardDisplay({ requireTable = false }: { requireTable?: boole
 
     const fetchOrders = useCallback(async () => {
         try {
-            const orders = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
+            const orders = await fetchAllOrderPages(`${getWorkdayDateParams()}&include=ordersStationsStates`);
             if (!Array.isArray(orders)) return;
 
             const toRO = (o: Order): ReadyOrder => ({

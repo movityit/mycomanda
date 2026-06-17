@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { OrderDetail } from "@/types/order";
-import { fetchAllOrderPages, getOpenOrderDateParams, isActiveOrder } from "@/lib/orders";
+import { fetchAllOrderPages, getWorkdayDateParams, isActiveOrder } from "@/lib/orders";
 
 type DisplayOrder = {
     displayCode: string;
@@ -18,7 +18,7 @@ export function PublicDisplay() {
 
     const loadOrders = useCallback(async () => {
         try {
-            const list = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
+            const list = await fetchAllOrderPages(`${getWorkdayDateParams()}&include=ordersStationsStates`);
 
             const prep: DisplayOrder[] = [];
             const rdy: DisplayOrder[] = [];

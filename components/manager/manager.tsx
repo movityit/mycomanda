@@ -9,7 +9,7 @@ import { StationCard } from "@/components/manager/StationCard";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { apiFetch, handleApiError } from "@/lib/api";
-import { fetchAllOrderPages, getOpenOrderDateParams, isActiveOrder } from "@/lib/orders";
+import { fetchAllOrderPages, getWorkdayDateParams, isActiveOrder } from "@/lib/orders";
 import type { Order, Station, Status } from "@/types/order";
 
 const toOrder = (o: Order): Order => ({
@@ -94,7 +94,7 @@ export default function Manager() {
 
     const fetchOrders = useCallback(async () => {
         try {
-            const orders = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
+            const orders = await fetchAllOrderPages(`${getWorkdayDateParams()}&include=ordersStationsStates`);
             setOrdersMap(new Map(orders.map(o => [o.id, o])));
         } catch (error) {
             if (handleApiError(error, router)) return;
