@@ -49,23 +49,20 @@ export function isActiveOrder(order: OrderDetail) {
 
     const states = order.orderStationStates ?? [];
     if (states.length > 0) {
-        return states.some(state => state.status !== "COMPLETED" && state.status !== "PICKED_UP");
+        return states.some(state => state.status !== "PICKED_UP");
     }
 
     return order.status === "CONFIRMED" || order.status === "PARTIAL" || order.status === "COMPLETED";
 }
 
 export function isOrderReady(order: OrderDetail) {
-    if (!isActiveOrder(order)) return false;
-
     const states = order.orderStationStates ?? [];
-    if (states.length > 0) return states.every(state => state.status === "COMPLETED");
+    if (states.length > 0) return states.every(state => state.status === "COMPLETED") && !states.some(s => s.status === "PICKED_UP");
     return order.status === "COMPLETED";
 }
 
 export function isOrderPreparing(order: OrderDetail) {
-    if (!isActiveOrder(order)) return false;
-
+    if (order.status === "PICKED_UP") return false;
     const states = order.orderStationStates ?? [];
     if (states.length > 0) return states.some(state => state.status === "CONFIRMED" || state.status === "PARTIAL");
     return order.status === "CONFIRMED" || order.status === "PARTIAL";

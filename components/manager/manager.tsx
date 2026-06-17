@@ -9,7 +9,7 @@ import { StationCard } from "@/components/manager/StationCard";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { apiFetch, handleApiError } from "@/lib/api";
-import { fetchAllOrderPages, getWorkdayDateParams, isActiveOrder } from "@/lib/orders";
+import { fetchAllOrderPages, getWorkdayDateParams } from "@/lib/orders";
 import type { Order, Station, Status } from "@/types/order";
 
 const toOrder = (o: Order): Order => ({
@@ -35,13 +35,13 @@ export default function Manager() {
 
     const confirmedOrders = useMemo(() =>
         Array.from(ordersMap.values()).filter(o =>
-            isActiveOrder(o) && (o.status === 'CONFIRMED' || o.status === 'PARTIAL')
+            o.status === 'CONFIRMED' || o.status === 'PARTIAL'
         ),
         [ordersMap]
     );
 
     const readyOrders = useMemo(() =>
-        Array.from(ordersMap.values()).filter(o => isActiveOrder(o) && o.status === 'COMPLETED'),
+        Array.from(ordersMap.values()).filter(o => o.status === 'COMPLETED'),
         [ordersMap]
     );
 
