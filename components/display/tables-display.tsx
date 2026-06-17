@@ -21,10 +21,7 @@ type TableGroup = {
 
 function normalizeTableLabel(table: string | undefined) {
     const raw = (table ?? "").trim();
-    const normalizedRaw = raw.toUpperCase();
-
-    if (!raw || normalizedRaw === "NO_TABLE" || normalizedRaw.startsWith("NO_")) return null;
-
+    if (!raw || raw.toUpperCase() === "NO_TABLE") return null;
     return {
         table: raw,
         label: `Tavolo ${raw}`,
@@ -45,8 +42,8 @@ export function TablesDisplay() {
 
             const relevantIds = list
                 .filter((o: OrderDetail) => {
-                    const table = (o.table ?? "").trim().toUpperCase();
-                    return table !== "" && table !== "NO_TABLE" && !table.startsWith("NO_") && isActiveOrder(o);
+                    const table = (o.table ?? "").trim();
+                    return table !== "" && table !== "NO_TABLE" && isActiveOrder(o);
                 })
                 .map((o: OrderDetail) => o.id);
 
