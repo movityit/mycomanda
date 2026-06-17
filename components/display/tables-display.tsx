@@ -39,6 +39,7 @@ export function TablesDisplay() {
     const [groups, setGroups] = useState<TableGroup[]>([]);
 
     const loadOrders = useCallback(async () => {
+        setGroups([]);
         try {
             const list = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
 
