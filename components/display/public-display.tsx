@@ -25,8 +25,10 @@ export function PublicDisplay() {
 
             for (const o of list) {
                 if (!isActiveOrder(o)) continue;
-                const hasConfirmed = o.orderStationStates?.some(s => s.status === "CONFIRMED");
-                const hasCompleted = o.orderStationStates?.some(s => s.status === "COMPLETED");
+                const states = o.orderStationStates ?? [];
+                const hasConfirmed = states.some(s => s.status === "CONFIRMED");
+                const hasCompleted = states.some(s => s.status === "COMPLETED");
+
                 const orderInfo = {
                     displayCode: o.displayCode,
                     ticketNumber: o.ticketNumber,
@@ -34,11 +36,19 @@ export function PublicDisplay() {
                     customer: o.customer ?? "",
                 };
 
-                if (hasConfirmed && !hasCompleted) {
-                    prep.push(orderInfo);
-                }
-                if (hasCompleted) {
-                    rdy.push(orderInfo);
+                if (states.length === 0) {
+                    if (o.status === "CONFIRMED" || o.status === "PARTIAL") {
+                        prep.push(orderInfo);
+                    } else if (o.status === "COMPLETED") {
+                        rdy.push(orderInfo);
+                    }
+                } else {
+                    if (hasConfirmed && !hasCompleted) {
+                        prep.push(orderInfo);
+                    }
+                    if (hasCompleted) {
+                        rdy.push(orderInfo);
+                    }
                 }
             }
 

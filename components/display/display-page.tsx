@@ -213,6 +213,13 @@ export function DisplayPage() {
     }, [loadMissingItems]);
 
     if (!selectedStation) {
+        if (stations.length === 0) {
+            return (
+                <div className="flex items-center justify-center h-screen">
+                    <p className="text-muted-foreground">Nessuna stazione configurata</p>
+                </div>
+            );
+        }
         return (
             <div className="flex items-center justify-center h-screen">
                 <p className="text-muted-foreground">Caricamento...</p>
