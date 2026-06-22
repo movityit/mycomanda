@@ -4,9 +4,9 @@
   <img src="public/banner.png" alt="Banner" width="100%" />
 </p>
 
-# 🔢 MyNumeri
+# 🧾 MyComanda
 
-**Real-time Order Display & Queue Management System**
+**Order & Display Management System for Kitchens, Tables, and Counters**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Next.js](https://img.shields.io/badge/Next.js-16.0-black)](https://nextjs.org/)
@@ -21,23 +21,30 @@
 
 ## 📖 About
 
-**MyNumeri** is a real-time order queue display system built with Next.js. Designed for restaurants, cafes, and food events like sagre and festivals, it provides a public-facing screen showing customers when their order is ready, and an internal management panel for staff to advance orders through each preparation stage.
+**MyComanda** is a real-time order management and display system built with Next.js. Specialized for restaurants, sagre, and festivals, it provides kitchen display screens, table management, counter (vassoio) tracking, and a manager panel — all in one application.
 
-Part of the **MySagra** ecosystem, MyNumeri integrates seamlessly with backend services to deliver a complete order tracking solution.
+Part of the **MySagra** ecosystem, MyComanda integrates seamlessly with backend services to deliver a complete order tracking solution.
 
 ## ✨ Features
 
 ### 🎯 Core Functionality
-- **Customer Display Screen** — public screen showing order numbers with automatic pagination
-- **Staff Manager Panel** — advance orders through *In Preparation* → *Ready* → *Picked Up* stages
-- **Real-time Updates** — instant order state changes via Server-Sent Events (SSE)
-- **Announcement Ticker** — scrolling marquee banner at the bottom of the display screen
-- **Workday-aware Filtering** — orders are automatically scoped to the current day's shift (08:00–07:59)
+- **Kitchen Display** — real-time preparation orders organized by station
+- **Tables Display** — table-based overview of all active orders
+- **Counter (Vassoio) Display** — vassoio/banco order tracking
+- **Manager Panel** — advance orders through *In Preparation* → *Ready* → *Picked Up* stages with mark/undo per item
+- **Customer Display** — public screen showing ready orders with automatic pagination and hybrid mode
+- **Real-time Updates** — instant order state changes via Server-Sent Events (SSE) + 30s polling fallback
+- **Workday-aware Filtering** — orders automatically scoped to the current day's shift (08:00–07:59)
+- **Station-based Filtering** — kitchen display per-station with empty station handling
+- **NO_TABLE Exclusion** — asporto/banco orders excluded from tables view
 
 ### 🖥️ Display Modes
-- **`ready`** — shows only orders ready for pickup
-- **`preparing`** — shows only orders currently being prepared
-- **`hybrid`** — split-screen with ¾ for preparation and ¼ for ready orders
+- **`standard`** — shows ready orders for customer pickup
+- **`public`** — public-facing display with pagination and announcement ticker
+- **`kitchen`** — kitchen station orders grouped by station
+- **`tables`** — table-based order overview
+- **`manager`** — staff panel for full order lifecycle management
+- **`comanda`** — counter (vassoio) command view
 
 ### 🎨 User Experience
 - **Modern UI** — built with shadcn/ui components and Radix UI primitives
@@ -48,7 +55,7 @@ Part of the **MySagra** ecosystem, MyNumeri integrates seamlessly with backend s
 
 ### 🔐 Security & Authentication
 - **Secure Authentication** — NextAuth v4 integration with session management
-- **Protected Routes** — staff pages require authentication; display screen is public
+- **Protected Routes** — staff pages require authentication; display/comanda screens are public
 
 ## 🚀 Installation
 
@@ -62,8 +69,8 @@ Part of the **MySagra** ecosystem, MyNumeri integrates seamlessly with backend s
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/MySagra/mynumeri.git
-   cd mynumeri
+   git clone https://github.com/MySagra/mycomanda.git
+   cd mycomanda
    ```
 
 2. **Install dependencies**
@@ -73,13 +80,13 @@ Part of the **MySagra** ecosystem, MyNumeri integrates seamlessly with backend s
 
 3. **Configure environment variables**
 
-   Create a `.env` file in the project root:
+   Copy `.env.template` to `.env` and adjust values:
    ```env
    # Backend API URL
    API_URL=http://mysagra-backend:4300
 
    # NextAuth Configuration
-   NEXTAUTH_URL=http://localhost:3033
+   NEXTAUTH_URL=http://localhost:3035
    NEXTAUTH_SECRET=your_secure_random_secret_here
    ```
 
@@ -92,11 +99,11 @@ Part of the **MySagra** ecosystem, MyNumeri integrates seamlessly with backend s
 
 5. **Open your browser**
 
-   Navigate to [http://localhost:3033](http://localhost:3033)
+   Navigate to [http://localhost:3035](http://localhost:3035)
 
 ## 🐳 Docker Deployment
 
-MyNumeri includes full Docker support for production deployments.
+MyComanda includes full Docker support for production deployments.
 
 ### Using Docker Compose
 
@@ -109,7 +116,7 @@ MyNumeri includes full Docker support for production deployments.
 
 3. **Access the application**
 
-   The application will be available at [http://localhost:3033](http://localhost:3033)
+   The application will be available at [http://localhost:3035](http://localhost:3035)
 
 ### Docker Configuration
 
@@ -160,14 +167,16 @@ docker network create mysagra_default
 ## 📁 Project Structure
 
 ```
-mynumeri/
+mycomanda/
 ├── app/
 │   ├── (login)/           # Login page
 │   ├── api/               # API routes (proxy to backend, SSE, announcements)
+│   ├── comanda/           # Counter/vassoio command view
 │   ├── display/           # Public customer display screen
 │   ├── manager/           # Staff order management panel
 │   └── settings/          # App settings page
 ├── components/
+│   ├── comanda/           # Comanda (counter) components
 │   ├── display/           # Display screen components
 │   ├── manager/           # Manager panel components
 │   ├── settings/          # Settings card components
@@ -186,17 +195,20 @@ mynumeri/
 | Route | Description | Access |
 |-------|-------------|--------|
 | `/` | Login | Public |
+| `/comanda` | Counter/vassoio command view | Public |
 | `/manager` | Staff order management panel | Authenticated |
 | `/display` | Public customer display screen | Public |
+| `/display/kitchen` | Kitchen station display | Public |
+| `/display/tables` | Table-based order overview | Public |
 | `/settings` | Display mode, appearance & event settings | Authenticated |
 
 ## 📜 Available Scripts
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start development server on port 3033 |
+| `npm run dev` | Start development server on port 3035 |
 | `npm run build` | Build production bundle |
-| `npm start` | Start production server on port 3033 |
+| `npm start` | Start production server on port 3035 |
 | `npm run lint` | Run ESLint for code quality |
 
 ## 🔧 Environment Variables
@@ -205,7 +217,7 @@ mynumeri/
 |----------|-------------|---------|
 | `API_URL` | Backend API URL (server-side only) | `http://mysagra-backend:4300` |
 | `NEXTAUTH_SECRET` | Secret key for NextAuth sessions | Random string (`openssl rand -base64 32`) |
-| `NEXTAUTH_URL` | Application URL for auth callbacks | `http://localhost:3033` |
+| `NEXTAUTH_URL` | Application URL for auth callbacks | `http://localhost:3035` |
 
 ## 🤝 Contributing
 
@@ -252,17 +264,18 @@ See the [LICENSE](LICENSE) file for full details.
 
 ## 🙏 Acknowledgments
 
+- Originally based on [MyNumeri](https://github.com/MySagra/mynumeri) from the [MySagra](https://github.com/MySagra) ecosystem
+- Developed by [movityit](https://github.com/movityit) with the assistance of AI
 - Built with [Next.js](https://nextjs.org/) by Vercel
 - UI components from [shadcn/ui](https://ui.shadcn.com/)
 - Authentication powered by [NextAuth](https://next-auth.js.org/)
 - Icons from [Lucide](https://lucide.dev/)
-- Part of the [MySagra](https://github.com/MySagra) ecosystem
 
 ## 📞 Support
 
 If you encounter any issues or have questions:
 
-- 🐛 [Open an issue](https://github.com/MySagra/mynumeri/issues)
+- 🐛 [Open an issue](https://github.com/MySagra/mycomanda/issues)
 - 💬 Check existing issues for solutions
 - 📧 Contact the MySagra team
 
@@ -270,8 +283,8 @@ If you encounter any issues or have questions:
 
 <div align="center">
 
-**Made with ❤️ by the MySagra Team**
+**Maintained by [movityit](https://github.com/movityit) — originally from the MySagra ecosystem**
 
-[⬆ Back to Top](#-mynumeri)
+[⬆ Back to Top](#-mycomanda)
 
 </div>
