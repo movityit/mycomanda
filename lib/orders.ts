@@ -71,3 +71,7 @@ export function isOrderPreparing(order: OrderDetail) {
 export function orderStateIsTerminal(state: OrderStationState) {
     return state.status === "COMPLETED" || state.status === "PICKED_UP";
 }
+
+export function itemProgressKey(item: { food: { id: string; ingredients: Array<{ name: string }> }; notes?: string | null }): string {
+    return `${item.food.id}|${item.notes ?? ""}|${item.food.ingredients.map(i => i.name).join("\u001f")}`;
+}

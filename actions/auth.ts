@@ -62,7 +62,7 @@ export async function login(username: string, password: string): Promise<LoginRe
 
                 (await cookies()).set(COOKIE_STORE_NAME, tokenValue, {
                     httpOnly: true,
-                    secure: process.env.NODE_ENV === "production",
+                    secure: process.env.NODE_ENV === "production" && !!process.env.AUTH_URL?.startsWith("https://"),
                     sameSite: "lax",
                     path: "/",
                     maxAge,

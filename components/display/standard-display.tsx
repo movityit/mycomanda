@@ -39,7 +39,7 @@ interface ReadyOrder {
 
 function shouldShowInStandardDisplay(order: { table?: string }, requireTable: boolean) {
     if (requireTable) {
-        return !order.table || order.table === "NO_TABLE";
+        return !order.table || order.table.startsWith("NO_TABLE");
     }
     return true;
 }

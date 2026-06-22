@@ -1,24 +1,26 @@
-import { getAuthToken } from "@/lib/auth";
 import { subscribeProgress } from "@/lib/item-progress-store";
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
-    const token = await getAuthToken();
-    if (!token) {
-        return new Response("Unauthorized", { status: 401 });
-    }
+    const encoder = new TextEncoder();
+    let unsubscribe: (() => void) | null = null;
 
     const stream = new ReadableStream({
         start(controller) {
-            const encoder = new TextEncoder();
-
-            const unsubscribe = subscribeProgress((orderId, stationId, progress) => {
-                const text = JSON.stringify({ orderId, stationId, progress });
-                controller.enqueue(encoder.encode(`data: ${text}\n\n`));
+            unsubscribe = subscribeProgress((orderId, stationId, progress) => {
+                try {
+                    controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({ orderId, stationId, progress })}\n\n`)
+                    );
+                } catch {
+                    unsubscribe?.();
+                    unsubscribe = null;
+                }
             });
-
-            return () => unsubscribe();
+        },
+        cancel() {
+            unsubscribe?.();
         },
     });
 
@@ -26,7 +28,7 @@ export async function GET() {
         headers: {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache, no-transform",
-            Connection: "keep-alive",
+            "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
     });

@@ -12,10 +12,20 @@ import { useAuth, USER_STORAGE_KEY } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { OrderCard } from "./order-card";
+import { PickedUpOrdersSheet } from "./picked-up-orders-sheet";
 import type { OrderDetail, Station } from "@/types/order";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { fetchAllOrderPages, getOpenOrderDateParams, isActiveOrder } from "@/lib/orders";
+import { fetchAllOrderPages } from "@/lib/orders";
+
+function getWorkdayBounds() {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const start = new Date(now);
+    if (currentHour < 7) start.setDate(start.getDate() - 1);
+    start.setHours(7, 0, 0, 0);
+    return { dateFrom: start.toISOString(), dateTo: now.toISOString() };
+}
 
 export function ComandaPage() {
     const router = useRouter();
@@ -31,65 +41,76 @@ export function ComandaPage() {
         selectedRef.current = selectedStation;
     }, [selectedStation]);
 
-    // Fetch stations
+    const fetchOrders = useCallback(async (station: string) => {
+        try {
+            const { dateFrom, dateTo } = getWorkdayBounds();
+            const dateParams = `&dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`;
+            const list = await fetchAllOrderPages(`${dateParams}&include=ordersStationsStates`);
+
+            const relevantIds = list
+                .filter((o: OrderDetail) =>
+                    o.ordersStations?.includes(station) ||
+                    o.orderStationStates?.some(s => s.stationId === station)
+                )
+                .map((o: OrderDetail) => o.id);
+
+            const details = await Promise.all(
+                relevantIds.map((id: string) =>
+                    fetch(`/api/orders/${id}`).then(r => r.json())
+                )
+            );
+
+            const orderMap = new Map<string, OrderDetail>();
+            details.forEach((o: OrderDetail) => orderMap.set(o.id, o));
+            setOrders(orderMap);
+
+            const progressEntries = await Promise.all(
+                relevantIds.map((id: string) =>
+                    fetch(`/api/orders/${id}/progress?stationId=${station}`)
+                        .then(r => r.ok ? r.json() : {})
+                        .then((progress: Record<string, number>) => [id, progress] as const)
+                )
+            );
+            setCompletedCounts(Object.fromEntries(progressEntries));
+        } catch (err) {
+            console.error("[comanda] fetchOrders error:", err);
+        }
+    }, []);
+
     useEffect(() => {
         fetch("/api/stations")
             .then(r => r.json())
-            .then((data: Station[]) => {
+            .then((json: Station[] | { data: Station[] }) => {
+                const data = Array.isArray(json) ? json : (json as { data: Station[] }).data ?? [];
                 setStations(data);
                 if (data.length > 0) {
-                    setSelectedStation(prev => prev ?? data[0].id);
+                    const station = data[0].id;
+                    setSelectedStation(station);
+                    fetchOrders(station);
                 }
             })
-            .catch(console.error);
-    }, []);
+            .catch(err => console.error("[comanda] stations fetch error:", err));
+    }, [fetchOrders]);
 
-    // Fetch orders for selected station
     useEffect(() => {
-        if (!selectedStation) return;
-
-        (async () => {
-            try {
-                const list = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
-
-                const station = selectedStation;
-                const relevantIds = list
-                    .filter((o: OrderDetail) =>
-                        isActiveOrder(o) && (
-                            o.ordersStations?.includes(station) ||
-                            o.orderStationStates?.some(s => s.stationId === station)
-                        )
-                    )
-                    .map((o: OrderDetail) => o.id);
-
-                // Fetch full detail (with categorizedItems) for each order
-                const details = await Promise.all(
-                    relevantIds.map((id: string) =>
-                        fetch(`/api/orders/${id}`).then(r => r.json())
-                    )
-                );
-
-                const orderMap = new Map<string, OrderDetail>();
-                details.forEach((o: OrderDetail) => orderMap.set(o.id, o));
-                setOrders(orderMap);
-
-                const progressEntries = await Promise.all(
-                    relevantIds.map((id: string) =>
-                        fetch(`/api/orders/${id}/progress?stationId=${station}`)
-                            .then(r => r.ok ? r.json() : {})
-                            .then((progress: Record<string, number>) => [id, progress] as const)
-                    )
-                );
-                setCompletedCounts(Object.fromEntries(progressEntries));
-            } catch (err) {
-                console.error(err);
-            }
-        })();
-    }, [selectedStation]);
+        if (selectedStation) fetchOrders(selectedStation);
+    }, [selectedStation, fetchOrders]);
 
     // SSE connection
     useEffect(() => {
+        const station = selectedRef.current;
+        if (station) fetchOrders(station);
+
         const es = new EventSource("/api/events/display");
+        let isFirstOpen = true;
+
+        es.addEventListener('open', () => {
+            if (!isFirstOpen) {
+                const s = selectedRef.current;
+                if (s) fetchOrders(s);
+            }
+            isFirstOpen = false;
+        });
 
         es.addEventListener("confirmed-order", (event: MessageEvent) => {
             try {
@@ -170,7 +191,7 @@ export function ComandaPage() {
         });
 
         return () => es.close();
-    }, []);
+    }, [fetchOrders]);
 
     const handleMarkReady = useCallback(async (orderId: string) => {
         if (!selectedStation) return;
@@ -184,6 +205,51 @@ export function ComandaPage() {
             toast.success("Ordine completato");
         } catch {
             toast.error("Errore durante l'aggiornamento");
+        }
+    }, [selectedStation]);
+
+    const handleUndoReady = useCallback(async (orderId: string) => {
+        if (!selectedStation) return;
+        try {
+            const res = await fetch(`/api/orders/${orderId}/stations/${selectedStation}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "CONFIRMED" }),
+            });
+            if (!res.ok) throw new Error("Failed to revert");
+            toast.success("Ordine rimesso in preparazione");
+        } catch {
+            toast.error("Errore durante il ripristino");
+        }
+    }, [selectedStation]);
+
+    const handlePickup = useCallback(async (orderId: string) => {
+        if (!selectedStation) return;
+        try {
+            const res = await fetch(`/api/orders/${orderId}/stations/${selectedStation}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "PICKED_UP" }),
+            });
+            if (!res.ok) throw new Error("Failed to pickup");
+            toast.success("Ordine consegnato");
+        } catch {
+            toast.error("Errore durante la consegna");
+        }
+    }, [selectedStation]);
+
+    const handleUndoPickup = useCallback(async (orderId: string) => {
+        if (!selectedStation) return;
+        try {
+            const res = await fetch(`/api/orders/${orderId}/stations/${selectedStation}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "COMPLETED" }),
+            });
+            if (!res.ok) throw new Error("Failed to revert pickup");
+            toast.success("Consegna annullata");
+        } catch {
+            toast.error("Errore durante l'annullamento");
         }
     }, [selectedStation]);
 
@@ -302,6 +368,13 @@ export function ComandaPage() {
             return s?.status === "COMPLETED";
         })
         .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+
+    const pickedUpOrders = Array.from(orders.values())
+        .filter(o => {
+            const s = o.orderStationStates?.find(s => s.stationId === selectedStation);
+            return s?.status === "PICKED_UP";
+        })
+        .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? "")).reverse();
 
     return (
         <div className="flex flex-col h-dvh bg-background">
@@ -431,14 +504,23 @@ export function ComandaPage() {
                     </div>
                 </div>
 
-                <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 flex flex-col border-r overflow-hidden">
                     <div className="px-4 py-3 bg-green-50 dark:bg-green-950/30 border-b shrink-0">
-                        <h2 className="text-lg font-semibold text-green-800 dark:text-green-300">
-                            Pronti
-                        </h2>
-                        <span className="text-sm text-muted-foreground">
-                            {readyOrders.length} ordini
-                        </span>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h2 className="text-lg font-semibold text-green-800 dark:text-green-300">
+                                    Pronti
+                                </h2>
+                                <span className="text-sm text-muted-foreground">
+                                    {readyOrders.length} ordini
+                                </span>
+                            </div>
+                            <PickedUpOrdersSheet
+                                pickedUpOrders={pickedUpOrders}
+                                stationId={selectedStation}
+                                onUndoPickup={handleUndoPickup}
+                            />
+                        </div>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-3">
                         {readyOrders.length === 0 ? (
@@ -454,10 +536,13 @@ export function ComandaPage() {
                                 onMarkItemUnit={markItemUnit}
                                 onUnmarkItemUnit={unmarkItemUnit}
                                 onMarkReady={handleMarkReady}
+                                onUndoReady={handleUndoReady}
+                                onPickup={handlePickup}
                             />
                         ))}
                     </div>
                 </div>
+
             </div>
         </div>
     );

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { OrderDetail, Station } from "@/types/order";
 import { KITCHEN_DISPLAY_ZOOM_KEY } from "@/components/settings/DisplayModeSettingsCard";
-import { fetchAllOrderPages, getOpenOrderDateParams, isActiveOrder } from "@/lib/orders";
+import { fetchAllOrderPages, getOpenOrderDateParams, isActiveOrder, itemProgressKey } from "@/lib/orders";
 
 type MissingItem = {
     key: string;
@@ -15,7 +15,26 @@ type MissingItem = {
     orderIds: string[];
     foodId: string;
     ticketNumber: number;
+    confirmedAt?: string;
 };
+
+function KitchenTimer({ confirmedAt }: { confirmedAt: string }) {
+    const [now, setNow] = useState(Date.now());
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 30000);
+        return () => clearInterval(id);
+    }, []);
+    const minutes = (now - new Date(confirmedAt).getTime()) / 60000;
+    const label = minutes > 60
+        ? `${Math.floor(minutes / 60)}h ${Math.floor(minutes % 60)}m`
+        : `${Math.round(minutes)}min`;
+    const color = minutes > 30 ? "text-red-600" : minutes > 15 ? "text-amber-600" : "text-gray-700";
+    return (
+        <span className={`text-2xl font-black tabular-nums whitespace-nowrap ${color}`}>
+            {label}
+        </span>
+    );
+}
 
 export function DisplayPage() {
     const [stations, setStations] = useState<Station[]>([]);
@@ -23,11 +42,12 @@ export function DisplayPage() {
     const [missingItems, setMissingItems] = useState<MissingItem[]>([]);
     const [displayZoom, setDisplayZoom] = useState(100);
     const selectedRef = useRef(selectedStation);
-    const progressMapRef = useRef<Record<string, Record<string, number>>>({});
 
     useEffect(() => {
         selectedRef.current = selectedStation;
     }, [selectedStation]);
+
+    const reloadKeyRef = useRef(0);
 
     useEffect(() => {
         fetch("/api/display-config")
@@ -83,19 +103,32 @@ export function DisplayPage() {
     }, []);
 
     const loadMissingItems = useCallback(async (station: string) => {
+        const key = ++reloadKeyRef.current;
         try {
             const list = await fetchAllOrderPages(`${getOpenOrderDateParams()}&include=ordersStationsStates`);
+            if (key !== reloadKeyRef.current) return;
 
             const relevantIds = list
                 .filter((o: OrderDetail) => {
+                    const hasStation = o.ordersStations?.includes(station) ||
+                        o.orderStationStates?.some(s => s.stationId === station);
+                    if (!hasStation) return false;
                     const state = o.orderStationStates?.find(s => s.stationId === station);
-                    return state && isActiveOrder(o) && (state.status === "CONFIRMED" || state.status === "PARTIAL");
+                    const status = state?.status ?? "CONFIRMED";
+                    return isActiveOrder(o) && (status === "CONFIRMED" || status === "PARTIAL");
                 })
                 .map((o: OrderDetail) => o.id);
 
-            const details = await Promise.all(
+            const details = await Promise.allSettled(
                 relevantIds.map((id: string) => fetch(`/api/orders/${id}`).then(r => r.json()))
             );
+            if (key !== reloadKeyRef.current) return;
+
+            const settledDetails: OrderDetail[] = [];
+            details.forEach((result, i) => {
+                if (result.status === "fulfilled") settledDetails.push(result.value);
+                else console.warn("Failed to fetch order detail", relevantIds[i], result.reason);
+            });
 
             const progressByOrder = await Promise.all(
                 relevantIds.map(async (id: string) => {
@@ -108,18 +141,19 @@ export function DisplayPage() {
                     }
                 })
             );
+            if (key !== reloadKeyRef.current) return;
             const progressMap = Object.fromEntries(progressByOrder);
-            progressMapRef.current = progressMap;
 
             const map = new Map<string, MissingItem>();
 
-            details.forEach((o: OrderDetail) => {
+            settledDetails.forEach((o: OrderDetail) => {
                 const state = o.orderStationStates?.find(s => s.stationId === station);
                 if (!state || state.status === "COMPLETED" || state.status === "PICKED_UP") return;
 
                 o.categorizedItems?.forEach(cat => {
                     cat.items.forEach(item => {
-                        const progress = progressMap[o.id]?.[item.food.id] ?? 0;
+                        const progressKey = itemProgressKey(item);
+                        const progress = progressMap[o.id]?.[progressKey] ?? 0;
                         const remaining = Math.max(0, item.quantity - progress);
                         if (remaining <= 0) return;
 
@@ -132,6 +166,9 @@ export function DisplayPage() {
                                 existing.orders.push(o.displayCode);
                                 existing.orderIds.push(o.id);
                             }
+                            if (o.confirmedAt && (!existing.confirmedAt || o.confirmedAt < existing.confirmedAt)) {
+                                existing.confirmedAt = o.confirmedAt;
+                            }
                         } else {
                             map.set(key, {
                                 key,
@@ -143,6 +180,7 @@ export function DisplayPage() {
                                 orderIds: [o.id],
                                 foodId: item.food.id,
                                 ticketNumber: o.ticketNumber,
+                                confirmedAt: o.confirmedAt,
                             });
                         }
                     });
@@ -160,23 +198,6 @@ export function DisplayPage() {
             console.error(err);
         }
     }, []);
-
-    const handleMark = useCallback(async (item: MissingItem, isUndo: boolean) => {
-        const station = selectedRef.current;
-        if (!station) return;
-        const orderId = item.orderIds[0];
-        if (!orderId) return;
-        const current = progressMapRef.current[orderId]?.[item.foodId] ?? 0;
-        const newCount = isUndo ? Math.max(0, current - 1) : current + 1;
-        try {
-            await fetch(`/api/orders/${orderId}/progress?stationId=${station}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ itemId: item.foodId, count: newCount }),
-            });
-            if (station) loadMissingItems(station);
-        } catch { /* ignore */ }
-    }, [loadMissingItems]);
 
     useEffect(() => {
         if (!selectedStation) return;
@@ -284,9 +305,12 @@ export function DisplayPage() {
                         {missingItems.map(item => (
                             <div key={item.key} className="rounded-3xl bg-white border-4 border-gray-200 shadow-sm p-6 flex flex-col justify-between">
                                 <div>
-                                    <h2 className="text-4xl font-black tracking-tight text-black leading-tight">
-                                        {item.name}
-                                    </h2>
+                                    <div className="flex items-start justify-between gap-4">
+                                        <h2 className="text-4xl font-black tracking-tight text-black leading-tight">
+                                            {item.name}
+                                        </h2>
+                                        {item.confirmedAt && <KitchenTimer confirmedAt={item.confirmedAt} />}
+                                    </div>
                                     {item.notes && (
                                         <p className="mt-3 text-xl font-bold text-amber-600">
                                             {item.notes}
@@ -310,20 +334,7 @@ export function DisplayPage() {
                                         ))}
                                     </div>
                                 </div>
-                                <div className="mt-6 flex gap-3">
-                                    <button
-                                        onClick={() => handleMark(item, false)}
-                                        className="flex-1 py-3 rounded-2xl bg-green-500 text-white text-2xl font-black hover:bg-green-600 active:scale-95 transition"
-                                    >
-                                        ✓
-                                    </button>
-                                    <button
-                                        onClick={() => handleMark(item, true)}
-                                        className="flex-1 py-3 rounded-2xl bg-red-500 text-white text-2xl font-black hover:bg-red-600 active:scale-95 transition"
-                                    >
-                                        ↩
-                                    </button>
-                                </div>
+
                             </div>
                         ))}
                     </div>

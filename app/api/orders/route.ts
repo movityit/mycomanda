@@ -9,7 +9,9 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
+    const page = searchParams.get("page") ?? "1";
     const backendUrl = process.env.API_URL || "http://localhost:3000";
+    console.log(`[orders] page=${page} url=${request.url}`);
 
     // Default to passing large limit to fetch all, if not specified
     if (!searchParams.has("limit")) {

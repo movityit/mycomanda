@@ -27,5 +27,5 @@
 
 ## Gotchas
 - Stations API may return `{ data: [...] }` instead of a bare array — handle both.
-- `NO_TABLE_PRESET` is a different value (preset order without table) — not the same as `NO_TABLE`.
+
 - After each `docker compose build`, the user must hard-refresh the browser (Cmd+Shift+R) to clear cached JS chunks.

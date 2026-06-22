@@ -92,7 +92,7 @@ export function PublicDisplay() {
                                         {o.displayCode}
                                     </span>
                                     <span className="text-2xl text-muted-foreground">
-                                        {o.table && o.table !== "NO_TABLE" && `Tavolo ${o.table}`}
+                                        {o.table && !o.table.startsWith("NO_TABLE") && `Tavolo ${o.table}`}
                                     </span>
                                 </div>
                             ))}
@@ -123,7 +123,7 @@ export function PublicDisplay() {
                                         PRONTO
                                     </span>
                                     <span className="text-2xl text-muted-foreground">
-                                        {o.table && o.table !== "NO_TABLE" && `Tavolo ${o.table}`}
+                                        {o.table && !o.table.startsWith("NO_TABLE") && `Tavolo ${o.table}`}
                                     </span>
                                 </div>
                             ))}
